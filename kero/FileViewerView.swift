@@ -43,11 +43,14 @@ final class FileTab: nonisolated ObservableObject, nonisolated Identifiable {
     /// editors use this as their identity so an already-mounted pane is rebuilt
     /// with the new content while preserving its stored cursor/scroll state.
     @Published private(set) var reloadRevision: UInt = 0
+    private var editorFocusState = EditorFocusState()
+    private var autosaveScheduled = false
 
-    /// The editor's scroll view while this file is on screen, so a pane-move
-    /// drag can snapshot it for the drag thumbnail. Weak — owned by the mounted
-    /// editor, nils out when the pane unmounts.
-    weak var editorView: NSView?
+    /// The file's long-lived editor view. STTextView's native undo operations
+    /// target the text view itself, so keeping this view alive across tab and
+    /// zoom transitions preserves its undo/redo history. SwiftUI reparents the
+    /// same view when the pane mounts again.
+    var editorView: NSView?
 
     private nonisolated static let maxTextBytes = 5 << 20
     private nonisolated static let imageExtensions: Set<String> = [
@@ -146,6 +149,9 @@ final class FileTab: nonisolated ObservableObject, nonisolated Identifiable {
             self.savedText = loaded.text
             self.imageFingerprint = loaded.imageFingerprint
             self.saveError = nil
+            // An external reload starts a new editing history. The next
+            // representable mount creates a text view from the new bytes.
+            self.editorView = nil
             self.reloadRevision &+= 1
         }
     }
@@ -209,6 +215,52 @@ final class FileTab: nonisolated ObservableObject, nonisolated Identifiable {
             )
         }
         return LoadedContent(content: .text, text: string, imageFingerprint: nil)
+    }
+
+    /// Receives the effective focus computed by a mounted editor. Autosave is
+    /// deliberately the only side effect of the focused → unfocused edge.
+    func updateEditorFocus(source: UUID, isFocused: Bool) {
+        guard editorFocusState.update(source: source, isFocused: isFocused) else {
+            return
+        }
+        scheduleAutosaveIfEnabled()
+    }
+
+    /// Ends the focus session before a close operation checks `isDirty`.
+    /// SwiftUI removes the editor later, so waiting for view teardown would
+    /// otherwise show a save confirmation for a file autosave can write.
+    func suspendEditorFocus() -> EditorFocusState.Suspension {
+        let result = editorFocusState.suspend()
+        if result.didLoseFocus {
+            autosaveIfEnabled()
+        }
+        return result.0
+    }
+
+    /// A cancelled close leaves the editor in place, so its previous focus
+    /// sources remain valid.
+    func restoreEditorFocus(_ suspension: EditorFocusState.Suspension) {
+        editorFocusState.restore(suspension)
+    }
+
+    private func autosaveIfEnabled() {
+        guard AppSettings.shared.autoSaveFiles else { return }
+        save()
+    }
+
+    /// Focus notifications arrive inside AppKit's responder transition.
+    /// Publishing `isDirty` from that callback can rebuild the SwiftUI pane
+    /// while AppKit is still finishing the transition, so write on the next
+    /// main-run-loop turn instead. Close operations continue to use the
+    /// synchronous path above because they inspect `isDirty` immediately.
+    private func scheduleAutosaveIfEnabled() {
+        guard AppSettings.shared.autoSaveFiles, !autosaveScheduled else { return }
+        autosaveScheduled = true
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            self.autosaveScheduled = false
+            self.autosaveIfEnabled()
+        }
     }
 }
 

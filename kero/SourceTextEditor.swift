@@ -63,12 +63,50 @@ struct SourceTextEditor: NSViewRepresentable {
     }
 
     func makeNSView(context: Context) -> NSScrollView {
-        let scrollView = RestorableScrollView()
-        let textView = FocusReportingTextView()
+        let scrollView: RestorableScrollView
+        let textView: FocusReportingTextView
+        let isNewEditor: Bool
+
+        if let existingScrollView = file.editorView as? RestorableScrollView,
+           let existingTextView = existingScrollView.documentView as? FocusReportingTextView {
+            scrollView = existingScrollView
+            textView = existingTextView
+            isNewEditor = false
+        } else {
+            scrollView = RestorableScrollView()
+            textView = FocusReportingTextView()
+            isNewEditor = true
+        }
+
         textView.onBecomeFirstResponder = onFocused
         textView.splitTarget.onSplit = onSplit
         textView.splitTarget.onNewBrowserTab = onNewBrowserTab
         textView.splitTarget.onNewBrowserPane = onNewBrowserPane
+
+        if isNewEditor {
+            configureNewEditor(textView, in: scrollView)
+        }
+
+        apply(to: textView, scrollView: scrollView)
+        context.coordinator.attach(textView: textView, scrollView: scrollView)
+
+        // Only grab focus on mount when this pane is the focused one, so an
+        // unfocused split doesn't steal the caret.
+        if isFocused {
+            DispatchQueue.main.async {
+                textView.window?.makeFirstResponder(textView)
+            }
+        }
+        context.coordinator.wasFocused = isFocused
+        // Expose the view so a pane-move drag can snapshot it as a thumbnail.
+        file.editorView = scrollView
+        return scrollView
+    }
+
+    private func configureNewEditor(
+        _ textView: FocusReportingTextView,
+        in scrollView: RestorableScrollView
+    ) {
         scrollView.wantsLayer = true
         scrollView.hasVerticalScroller = true
         scrollView.hasHorizontalScroller = true
@@ -110,8 +148,8 @@ struct SourceTextEditor: NSViewRepresentable {
             textView.addPlugin(plugin)
         }
 
-        // Captured before the coordinator attaches, because its scroll
-        // observer starts overwriting `editorState` immediately.
+        // Restore saved cursor state only for a newly-created editor. A
+        // remounted editor retains its live selection and native undo stack.
         let state = file.editorState
         if let location = state.selectionLocation {
             let limit = (textView.text ?? "").utf16.count
@@ -119,8 +157,6 @@ struct SourceTextEditor: NSViewRepresentable {
             let length = min(max(0, state.selectionLength ?? 0), limit - start)
             textView.textSelection = NSRange(location: start, length: length)
         }
-
-        context.coordinator.attach(textView: textView, scrollView: scrollView)
 
         // Restore the saved scroll offset during the first layout pass — while
         // the frame is finally known but before the first paint — so the file
@@ -140,18 +176,6 @@ struct SourceTextEditor: NSViewRepresentable {
                 textView.needsLayout = true
             }
         }
-
-        // Only grab focus on mount when this pane is the focused one, so an
-        // unfocused split doesn't steal the caret.
-        if isFocused {
-            DispatchQueue.main.async {
-                textView.window?.makeFirstResponder(textView)
-            }
-        }
-        context.coordinator.wasFocused = isFocused
-        // Expose the view so a pane-move drag can snapshot it as a thumbnail.
-        file.editorView = scrollView
-        return scrollView
     }
 
     func updateNSView(_ scrollView: NSScrollView, context: Context) {
@@ -169,6 +193,10 @@ struct SourceTextEditor: NSViewRepresentable {
             }
         }
         context.coordinator.wasFocused = isFocused
+    }
+
+    static func dismantleNSView(_ scrollView: NSScrollView, coordinator: Coordinator) {
+        coordinator.detach()
     }
 
     /// Take exactly the space SwiftUI offers. Without this, SwiftUI sizes the
@@ -218,6 +246,17 @@ struct SourceTextEditor: NSViewRepresentable {
     @MainActor
     final class Coordinator: NSObject, STTextViewDelegate {
         private let file: FileTab
+        private let focusSource = UUID()
+        private lazy var focusTracker = EditorFocusTracker { [weak self] isFocused in
+            guard let self else { return }
+            if !isFocused {
+                // STTextView coalesces consecutive typing in an open undo
+                // group. Focus loss is an editing boundary: close that group
+                // before autosave publishes any model changes.
+                self.textView?.breakUndoCoalescing()
+            }
+            self.file.updateEditorFocus(source: self.focusSource, isFocused: isFocused)
+        }
         private weak var textView: STTextView?
         private var scrollObserver: (any NSObjectProtocol)?
         /// Last-applied focus state, so `updateNSView` can act only on the
@@ -231,6 +270,10 @@ struct SourceTextEditor: NSViewRepresentable {
         func attach(textView: STTextView, scrollView: NSScrollView) {
             self.textView = textView
             textView.textDelegate = self
+            if let reportingTextView = textView as? FocusReportingTextView {
+                reportingTextView.focusTracker = focusTracker
+                focusTracker.attach(to: reportingTextView)
+            }
             scrollObserver = NotificationCenter.default.addObserver(
                 forName: NSView.boundsDidChangeNotification,
                 object: scrollView.contentView,
@@ -241,6 +284,22 @@ struct SourceTextEditor: NSViewRepresentable {
                     self.file.editorState.scrollX = clipView.bounds.origin.x
                     self.file.editorState.scrollY = clipView.bounds.origin.y
                 }
+            }
+        }
+
+        func detach() {
+            textView?.breakUndoCoalescing()
+            focusTracker.detach()
+            if let reportingTextView = textView as? FocusReportingTextView {
+                reportingTextView.focusTracker = nil
+                reportingTextView.onBecomeFirstResponder = nil
+                reportingTextView.splitTarget.onSplit = nil
+            }
+            textView?.textDelegate = nil
+            textView = nil
+            if let scrollObserver {
+                NotificationCenter.default.removeObserver(scrollObserver)
+                self.scrollObserver = nil
             }
         }
 
@@ -272,14 +331,31 @@ struct SourceTextEditor: NSViewRepresentable {
 /// and appends pane-split items to its context menu.
 final class FocusReportingTextView: STTextView {
     var onBecomeFirstResponder: (() -> Void)?
+    weak var focusTracker: EditorFocusTracker?
     /// Owns the split context-menu items, kept off the text view so its own
     /// menu validation doesn't disable them.
     let splitTarget = SplitMenuTarget()
 
     override func becomeFirstResponder() -> Bool {
         let became = super.becomeFirstResponder()
-        if became { onBecomeFirstResponder?() }
+        if became {
+            focusTracker?.didBecomeFirstResponder()
+            onBecomeFirstResponder?()
+        }
         return became
+    }
+
+    override func resignFirstResponder() -> Bool {
+        let resigned = super.resignFirstResponder()
+        if resigned {
+            focusTracker?.didResignFirstResponder()
+        }
+        return resigned
+    }
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        focusTracker?.viewDidMoveToWindow()
     }
 
     override func menu(for event: NSEvent) -> NSMenu? {

@@ -225,6 +225,28 @@ enum Theme {
     static var sidebar: NSColor { dynamic { $0.sidebarNSColor } }
     static var accent: NSColor { dynamic { $0.accentNSColor } }
 
+    /// Semantic project-tree status colors. Every selectable theme currently
+    /// shares this palette, but call sites depend on meanings rather than hex
+    /// values so themes can customize them later.
+    static func fileTreeGitStatus(_ status: FileTreeGitStatus) -> NSColor {
+        dynamic { theme in
+            let hex: UInt32
+            switch (status, theme.isDark) {
+            case (.created, true): hex = 0xA1C181
+            case (.deleted, true): hex = 0xD07277
+            case (.modified, true): hex = 0xDEC184
+            case (.conflict, true): hex = 0xDEC184
+            case (.ignored, true): hex = 0x878A98
+            case (.created, false): hex = 0x347D39
+            case (.deleted, false): hex = 0xCF222E
+            case (.modified, false): hex = 0x9A6700
+            case (.conflict, false): hex = 0x9A6700
+            case (.ignored, false): hex = 0x656D76
+            }
+            return fixedSRGB(hex)
+        }
+    }
+
     /// Hairline separators, derived from the theme's own palette so they
     /// stay visible even when a slot holds a theme that fights the
     /// appearance (say, a light background forced into the dark slot). The
@@ -255,6 +277,15 @@ enum Theme {
             let isDark = appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
             return resolve(terminal(dark: isDark))
         }
+    }
+
+    private nonisolated static func fixedSRGB(_ hex: UInt32) -> NSColor {
+        NSColor(
+            srgbRed: CGFloat((hex >> 16) & 0xff) / 255.0,
+            green: CGFloat((hex >> 8) & 0xff) / 255.0,
+            blue: CGFloat(hex & 0xff) / 255.0,
+            alpha: 1
+        )
     }
 
     /// Last-resort definition should a default name ever leave the catalog.

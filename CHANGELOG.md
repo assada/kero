@@ -16,6 +16,10 @@ the original feature bullet instead of adding separate entries for them.
 
 ## [unrelease]
 
+- Set a custom shell for new terminals in Settings. Leave the field empty to use the macOS login shell
+- Save edited files when the editor loses focus. This setting is off by default
+- Files and folders now use Git status colors. Folder colors summarize changes within each repository
+
 ## [0.1.32]
 
 - Add native English, Simplified Chinese, and Japanese localization throughout the app, with a language picker in Settings

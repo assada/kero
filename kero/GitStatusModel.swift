@@ -798,10 +798,6 @@ final class GitStatusModel: nonisolated ObservableObject {
         let failure: String?
     }
 
-    private nonisolated final class PipeData: @unchecked Sendable {
-        var value = Data()
-    }
-
     private func invalidateStatusRefresh() {
         statusRequestID &+= 1
         isRefreshing = false
@@ -944,55 +940,15 @@ final class GitStatusModel: nonisolated ObservableObject {
         var loadedDetails = false
     }
 
-    /// Runs Git while draining stdout and stderr concurrently. Reading either
-    /// pipe only after the process exits can deadlock when the other fills.
+    /// Shared wrapper retained for the Git panel's existing call sites.
     nonisolated static func runGit(
         _ args: [String], in dir: String
     ) -> (status: Int32, stdout: String, stderr: String) {
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/git")
-        process.arguments = args
-        process.currentDirectoryURL = URL(fileURLWithPath: dir, isDirectory: true)
-        var env = ProcessInfo.processInfo.environment
-        env["GIT_OPTIONAL_LOCKS"] = "0"
-        // Fail rather than hanging on a credential prompt behind the app.
-        env["GIT_TERMINAL_PROMPT"] = "0"
-        // Git diagnostics are parsed only to distinguish an ordinary folder
-        // from a broken repository. Pinning the locale makes that safe and
-        // also keeps relative dates stable in the compact history list.
-        env["LC_ALL"] = "C"
-        process.environment = env
-
-        let stdout = Pipe()
-        let stderr = Pipe()
-        process.standardOutput = stdout
-        process.standardError = stderr
-        process.standardInput = FileHandle.nullDevice
-
-        do {
-            try process.run()
-        } catch {
-            return (-1, "", error.localizedDescription)
-        }
-        let outData = PipeData()
-        let errData = PipeData()
-        let readers = DispatchGroup()
-        readers.enter()
-        DispatchQueue.global(qos: .utility).async {
-            outData.value = stdout.fileHandleForReading.readDataToEndOfFile()
-            readers.leave()
-        }
-        readers.enter()
-        DispatchQueue.global(qos: .utility).async {
-            errData.value = stderr.fileHandleForReading.readDataToEndOfFile()
-            readers.leave()
-        }
-        process.waitUntilExit()
-        readers.wait()
+        let result = GitCommandRunner.run(args, in: dir)
         return (
-            process.terminationStatus,
-            String(data: outData.value, encoding: .utf8) ?? "",
-            String(data: errData.value, encoding: .utf8) ?? ""
+            result.status,
+            result.stdoutString,
+            result.stderrString
         )
     }
 

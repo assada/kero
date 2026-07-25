@@ -181,10 +181,22 @@ final class AppSettings: nonisolated ObservableObject {
         didSet { save() }
     }
 
+    /// Save a dirty text file when its editor loses effective focus. Off by
+    /// default; the editor owns focus tracking and calls the normal save path.
+    @Published var autoSaveFiles: Bool {
+        didSet { save() }
+    }
+
     /// Restore each terminal's previous scrollback (as static, styled text)
     /// when the app relaunches, above the freshly started shell. Off by
     /// default: opt-in, and it writes captured output to disk.
     @Published var restoreTerminalHistory: Bool {
+        didSet { save() }
+    }
+
+    /// Shell executable for new terminal sessions. Empty follows the user's
+    /// macOS login shell.
+    @Published var shellPath: String {
         didSet { save() }
     }
 
@@ -227,7 +239,9 @@ final class AppSettings: nonisolated ObservableObject {
             ?? false
         macosOptionAsAlt = toml["terminal.macos-option-as-alt"]?.bool ?? false
         wrapLines = toml["editor.wrap-lines"]?.bool ?? false
+        autoSaveFiles = toml["editor.auto-save"]?.bool ?? false
         restoreTerminalHistory = toml["terminal.restore-history"]?.bool ?? false
+        shellPath = toml["terminal.shell"]?.string ?? ""
         terminalBackend = TerminalBackend(persisted: toml["terminal.backend"]?.string)
         applyAppearance()
         reloadThemeSelection()
@@ -274,7 +288,9 @@ final class AppSettings: nonisolated ObservableObject {
         themeLight = Theme.defaultLightThemeName
         macosOptionAsAlt = false
         wrapLines = false
+        autoSaveFiles = false
         restoreTerminalHistory = false
+        shellPath = ""
         terminalBackend = .fallback
     }
 
@@ -307,8 +323,14 @@ final class AppSettings: nonisolated ObservableObject {
         if wrapLines {
             lines.append("editor.wrap-lines = true")
         }
+        if autoSaveFiles {
+            lines.append("editor.auto-save = true")
+        }
         if restoreTerminalHistory {
             lines.append("terminal.restore-history = true")
+        }
+        if ShellConfiguration.hasCustomPath(shellPath) {
+            lines.append("terminal.shell = \(TOML.quote(shellPath))")
         }
         if terminalBackend != .fallback {
             lines.append("terminal.backend = \(TOML.quote(terminalBackend.rawValue))")

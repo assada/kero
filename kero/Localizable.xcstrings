@@ -6904,6 +6904,205 @@
         }
       }
     },
+    "Choose an executable file, not a folder." : {
+      "comment" : "Validation error for the custom shell setting.",
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "フォルダではなく、実行可能ファイルを選択してください。"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "请选择可执行文件，而不是文件夹。"
+          }
+        }
+      }
+    },
+    "Clean" : {
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "変更なし"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无更改"
+          }
+        }
+      }
+    },
+    "Created" : {
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "作成済み"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已创建"
+          }
+        }
+      }
+    },
+    "Default (%@)" : {
+      "comment" : "Placeholder for an empty custom shell field.",
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "デフォルト（%@）"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "默认（%@）"
+          }
+        }
+      }
+    },
+    "Enter an absolute path to a shell." : {
+      "comment" : "Validation error for the custom shell setting.",
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "シェルの絶対パスを入力してください。"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "输入 Shell 的绝对路径。"
+          }
+        }
+      }
+    },
+    "Git status: %@" : {
+      "comment" : "Accessibility value for a file-tree item.",
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gitステータス：%@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Git 状态：%@"
+          }
+        }
+      }
+    },
+    "Ignored" : {
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "無視"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已忽略"
+          }
+        }
+      }
+    },
+    "Leave empty to use %@. Changes apply to new terminals." : {
+      "comment" : "Accessibility hint for the custom shell field.",
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "空欄にすると%@を使用します。変更は新しいターミナルに適用されます。"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "留空则使用 %@。更改将应用于新建的终端。"
+          }
+        }
+      }
+    },
+    "Save files when focus changes" : {
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "フォーカスが変わったときにファイルを保存"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "焦点变化时保存文件"
+          }
+        }
+      }
+    },
+    "Shell" : {
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "シェル"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Shell"
+          }
+        }
+      }
+    },
+    "Shell is not executable. New terminals will use %@." : {
+      "comment" : "Validation error for the custom shell setting.",
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "シェルを実行できません。新しいターミナルでは%@を使用します。"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Shell 不可执行。新建的终端将使用 %@。"
+          }
+        }
+      }
+    },
+    "Shell not found. New terminals will use %@." : {
+      "comment" : "Validation error for the custom shell setting.",
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "シェルが見つかりません。新しいターミナルでは%@を使用します。"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "找不到 Shell。新建的终端将使用 %@。"
+          }
+        }
+      }
+    },
     "Your changes will be lost if you don't save them." : {
       "localizations" : {
         "ja" : {

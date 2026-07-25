@@ -19,6 +19,9 @@ final class FileTreeModel: nonisolated ObservableObject {
         /// True for the transient inline "new file/folder" input row, which
         /// has no backing file yet.
         var isDraft = false
+        /// Direct file state or the dominant state of this directory's
+        /// descendants, scoped to one Git repository.
+        var gitStatus: FileTreeGitStatus? = nil
     }
 
     /// A pending inline "new file/folder": an input row shown inside
@@ -30,11 +33,22 @@ final class FileTreeModel: nonisolated ObservableObject {
 
     @Published private(set) var rootPath = ""
     @Published private(set) var items: [Item] = []
+    @Published private(set) var rootGitStatus: FileTreeGitStatus?
+    @Published private(set) var rootIsGitManaged = false
     /// Path of the row currently being renamed inline, if any.
     @Published private(set) var renamingPath: String?
     /// The pending new-file/folder input row, if any.
     @Published private(set) var draft: Draft?
     private var expanded: Set<String> = []
+    private var gitSnapshot = FileTreeGitSnapshot.empty
+    private lazy var gitStatusController = FileTreeGitStatusController(
+        onSnapshot: { [weak self] snapshot in
+            self?.applyGitSnapshot(snapshot)
+        },
+        onWorktreeChange: { [weak self] in
+            self?.rebuild()
+        }
+    )
 
     var rootName: String {
         (rootPath as NSString).lastPathComponent
@@ -50,11 +64,18 @@ final class FileTreeModel: nonisolated ObservableObject {
         if root != rootPath {
             rootPath = root
             expanded = []
+            gitSnapshot = .empty
+            rootGitStatus = nil
+            rootIsGitManaged = false
             // Any in-progress inline edit belonged to the old tree.
             renamingPath = nil
             draft = nil
         }
-        rebuild()
+        rebuild(updateGitVisibility: false)
+        gitStatusController.configure(
+            workspaceRoot: root,
+            visiblePaths: visibleGitPaths
+        )
     }
 
     func toggle(_ item: Item) {
@@ -228,13 +249,28 @@ final class FileTreeModel: nonisolated ObservableObject {
         alert.runModal()
     }
 
-    private func rebuild() {
+    private func rebuild(updateGitVisibility: Bool = true) {
         guard !rootPath.isEmpty else { return }
         var out: [Item] = []
         appendChildren(of: rootPath, depth: 0, into: &out)
         if out != items {
             items = out
         }
+        if updateGitVisibility {
+            gitStatusController.updateVisiblePaths(visibleGitPaths)
+        }
+    }
+
+    private var visibleGitPaths: [String] {
+        [rootPath] + items.compactMap { $0.isDraft ? nil : $0.path }
+    }
+
+    private func applyGitSnapshot(_ snapshot: FileTreeGitSnapshot) {
+        guard snapshot != gitSnapshot else { return }
+        gitSnapshot = snapshot
+        rootGitStatus = snapshot.status(for: rootPath)
+        rootIsGitManaged = snapshot.isGitManaged(rootPath)
+        rebuild()
     }
 
     private func appendChildren(of dir: String, depth: Int, into out: inout [Item]) {
@@ -258,7 +294,13 @@ final class FileTreeModel: nonisolated ObservableObject {
                 let path = (dir as NSString).appendingPathComponent(name)
                 var isDir: ObjCBool = false
                 fm.fileExists(atPath: path, isDirectory: &isDir)
-                return Item(name: name, path: path, isDirectory: isDir.boolValue, depth: depth)
+                return Item(
+                    name: name,
+                    path: path,
+                    isDirectory: isDir.boolValue,
+                    depth: depth,
+                    gitStatus: gitSnapshot.status(for: path)
+                )
             }
             .sorted { a, b in
                 if a.isDirectory != b.isDirectory { return a.isDirectory }

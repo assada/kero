@@ -13,6 +13,7 @@ struct SettingsView: View {
     @ObservedObject private var updater = Updater.shared
     @State private var relaunchError = ""
     @State private var isShowingRelaunchError = false
+    @FocusState private var isShellFieldFocused: Bool
 
     /// Installed fixed-pitch families (bundled default first).
     private let families = TerminalFont.selectableFamilies()
@@ -151,6 +152,35 @@ struct SettingsView: View {
                     }
                 }
 
+                TextField(
+                    "Shell",
+                    text: $settings.shellPath,
+                    prompt: Text(
+                        String(
+                            localized: "Default (\(ShellConfiguration.defaultPath))",
+                            comment: "Placeholder for an empty custom shell field."
+                        )
+                    )
+                )
+                .disableAutocorrection(true)
+                .focused($isShellFieldFocused)
+                .onSubmit { isShellFieldFocused = false }
+                .accessibilityHint(
+                    String(
+                        localized: "Leave empty to use \(ShellConfiguration.defaultPath). Changes apply to new terminals.",
+                        comment: "Accessibility hint for the custom shell field."
+                    )
+                )
+
+                if !isShellFieldFocused,
+                   let message = ShellConfiguration.validationMessage(
+                    for: settings.shellPath
+                   ) {
+                    Label(message, systemImage: "exclamationmark.triangle.fill")
+                        .font(.callout)
+                        .foregroundStyle(.red)
+                }
+
                 Toggle("Thicken font strokes", isOn: $settings.fontThicken)
                 Text("Renders terminal text with slightly heavier strokes, like classic macOS font smoothing.")
                     .font(.callout)
@@ -175,6 +205,7 @@ struct SettingsView: View {
 
             Section("Text Editing") {
                 Toggle("Wrap lines to editor width", isOn: $settings.wrapLines)
+                Toggle("Save files when focus changes", isOn: $settings.autoSaveFiles)
             }
 
             Section("Updates") {
@@ -204,8 +235,10 @@ struct SettingsView: View {
                         && settings.theme == .system
                         && settings.themeDark == Theme.defaultDarkThemeName
                         && settings.themeLight == Theme.defaultLightThemeName
+                        && !settings.autoSaveFiles
                         && !settings.wrapLines
                         && !settings.restoreTerminalHistory
+                        && !ShellConfiguration.hasCustomPath(settings.shellPath)
                         && settings.terminalBackend == .fallback)
                 }
             }

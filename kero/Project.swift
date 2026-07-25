@@ -396,13 +396,16 @@ final class Project: nonisolated ObservableObject, nonisolated Identifiable {
             if terminate { session.terminate() }
             removePaneWithContent(content.id)
         case .file(let file):
+            let focusSuspension = file.suspendEditorFocus()
             guard file.isDirty else {
                 removePaneWithContent(content.id)
                 return
             }
             let window = NSApp.keyWindow ?? NSApp.mainWindow
             Task { @MainActor in
-                _ = await confirmCloseUnsaved(file, in: window)
+                if await confirmCloseUnsaved(file, in: window) {
+                    file.restoreEditorFocus(focusSuspension)
+                }
             }
         case .browser:
             removePaneWithContent(content.id)
@@ -494,6 +497,18 @@ final class Project: nonisolated ObservableObject, nonisolated Identifiable {
     /// is only torn down once every prompt has been answered — so cancelling
     /// out of a save prompt leaves the saved panes open too.
     private func closeBatch(_ targets: [PaneContent]) {
+        var seenFileIDs: Set<UUID> = []
+        let fileTargets = targets.compactMap { content -> FileTab? in
+            guard case .file(let file) = content,
+                  seenFileIDs.insert(file.id).inserted
+            else { return nil }
+            return file
+        }
+        let focusSuspensions = Dictionary(
+            uniqueKeysWithValues: fileTargets.map {
+                ($0.id, $0.suspendEditorFocus())
+            }
+        )
         let dirtyFiles = targets.compactMap { content -> FileTab? in
             if case .file(let file) = content, file.isDirty { return file }
             return nil
@@ -513,7 +528,14 @@ final class Project: nonisolated ObservableObject, nonisolated Identifiable {
             for file in dirtyFiles where file.isDirty {
                 // Bail the moment the user backs out — the clean panes, and any
                 // files not yet prompted, stay open.
-                if await confirmCloseUnsaved(file, in: window) { return }
+                if await confirmCloseUnsaved(file, in: window) {
+                    for remainingFile in fileTargets {
+                        if let suspension = focusSuspensions[remainingFile.id] {
+                            remainingFile.restoreEditorFocus(suspension)
+                        }
+                    }
+                    return
+                }
             }
             cleanContents.forEach { closeContent($0) }
         }
