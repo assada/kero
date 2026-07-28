@@ -139,16 +139,12 @@ struct SettingsView: View {
                 // omits backends this build cannot create, so every tab here
                 // takes effect instead of silently producing a dead pane.
                 if TerminalBackend.selectable.count > 1 {
-                    HStack(alignment: .top) {
+                    HStack {
                         Text("Backend")
                         Spacer()
-                        VStack(alignment: .leading, spacing: 8) {
-                            TerminalBackendPicker(selection: $settings.terminalBackend)
-                            Text("Changes apply to new terminals.")
-                                .font(.callout)
-                                .foregroundStyle(.secondary)
-                        }
+                        TerminalBackendPicker(selection: $settings.terminalBackend)
                     }
+                    .accessibilityHint("Changes apply to new terminals.")
                 }
 
                 ShellSettingsView(startup: $settings.terminalStartup)
@@ -216,7 +212,7 @@ struct SettingsView: View {
             }
         }
         .formStyle(.grouped)
-        .frame(width: 440)
+        .frame(width: 560)
         .alert(
             "Couldn’t Relaunch Kero",
             isPresented: $isShowingRelaunchError

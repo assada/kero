@@ -18,28 +18,29 @@ struct ShellSettingsView: View {
     }
 
     var body: some View {
-        Picker("Shell", selection: choice) {
-            Text("Login shell (\(ShellConfiguration.defaultPath))")
-                .tag(Choice.loginShell)
+        LabeledContent("Shell") {
+            HStack(spacing: 8) {
+                shellPicker
+                    .frame(width: isCustomCommand ? 180 : 360)
 
-            ForEach(selectableShells, id: \.self) { path in
-                Text(verbatim: path).tag(Choice.installed(path))
+                if isCustomCommand {
+                    TextField(
+                        "Executable",
+                        text: customProgram,
+                        prompt: Text(verbatim: ShellConfiguration.defaultPath)
+                    )
+                    .labelsHidden()
+                    .textFieldStyle(.roundedBorder)
+                    .disableAutocorrection(true)
+                    .focused($isProgramFieldFocused)
+                    .onSubmit { isProgramFieldFocused = false }
+                    .help(customProgram.wrappedValue)
+                }
             }
-
-            Divider()
-            Text("Custom command…").tag(Choice.customCommand)
+            .accessibilityHint("Changes apply to new terminals.")
         }
 
-        if case .customCommand = startup {
-            TextField(
-                "Executable",
-                text: customProgram,
-                prompt: Text(verbatim: ShellConfiguration.defaultPath)
-            )
-            .disableAutocorrection(true)
-            .focused($isProgramFieldFocused)
-            .onSubmit { isProgramFieldFocused = false }
-
+        if isCustomCommand {
             LabeledContent("Arguments") {
                 ShellArgumentsField(arguments: customArguments)
             }
@@ -54,16 +55,32 @@ struct ShellSettingsView: View {
                     .foregroundStyle(.red)
             }
         }
-
-        Text("Changes apply to new terminals.")
-            .font(.callout)
-            .foregroundStyle(.secondary)
     }
 
     private enum Choice: Hashable {
         case loginShell
         case installed(String)
         case customCommand
+    }
+
+    private var shellPicker: some View {
+        Picker("Shell", selection: choice) {
+            Text("Login shell (\(ShellConfiguration.defaultPath))")
+                .tag(Choice.loginShell)
+
+            ForEach(selectableShells, id: \.self) { path in
+                Text(verbatim: path).tag(Choice.installed(path))
+            }
+
+            Divider()
+            Text("Custom command…").tag(Choice.customCommand)
+        }
+        .labelsHidden()
+    }
+
+    private var isCustomCommand: Bool {
+        if case .customCommand = startup { return true }
+        return false
     }
 
     private var choice: Binding<Choice> {

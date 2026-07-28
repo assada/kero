@@ -22,9 +22,10 @@ struct ShellArgumentsField: NSViewRepresentable {
         field.action = #selector(Coordinator.commit(_:))
         field.tokenizingCharacterSet = .newlines
         field.objectValue = arguments
-        field.placeholderString = String(
+        field.placeholderString = "-l"
+        field.toolTip = String(
             localized: "Press Return after each argument.",
-            comment: "Placeholder for custom terminal command arguments."
+            comment: "Help for custom terminal command arguments."
         )
         field.setAccessibilityLabel(
             String(localized: "Arguments", comment: "Custom terminal command arguments.")
