@@ -194,9 +194,8 @@ final class AppSettings: nonisolated ObservableObject {
         didSet { save() }
     }
 
-    /// Shell executable for new terminal sessions. Empty follows the user's
-    /// macOS login shell.
-    @Published var shellPath: String {
+    /// What a new terminal starts. Read once when the session is created.
+    @Published var terminalStartup: TerminalStartup {
         didSet { save() }
     }
 
@@ -241,7 +240,25 @@ final class AppSettings: nonisolated ObservableObject {
         wrapLines = toml["editor.wrap-lines"]?.bool ?? false
         autoSaveFiles = toml["editor.auto-save"]?.bool ?? false
         restoreTerminalHistory = toml["terminal.restore-history"]?.bool ?? false
-        shellPath = toml["terminal.shell"]?.string ?? ""
+        switch toml["terminal.startup"]?.string {
+        case "shell":
+            if let program = toml["terminal.program"]?.string, !program.isEmpty {
+                terminalStartup = .shell(path: program)
+            } else {
+                terminalStartup = .loginShell
+            }
+        case "command":
+            if let program = toml["terminal.program"]?.string, !program.isEmpty {
+                terminalStartup = .customCommand(
+                    program: program,
+                    arguments: toml["terminal.arguments"]?.strings ?? []
+                )
+            } else {
+                terminalStartup = .loginShell
+            }
+        default:
+            terminalStartup = .loginShell
+        }
         terminalBackend = TerminalBackend(persisted: toml["terminal.backend"]?.string)
         applyAppearance()
         reloadThemeSelection()
@@ -290,7 +307,7 @@ final class AppSettings: nonisolated ObservableObject {
         wrapLines = false
         autoSaveFiles = false
         restoreTerminalHistory = false
-        shellPath = ""
+        terminalStartup = .loginShell
         terminalBackend = .fallback
     }
 
@@ -329,8 +346,20 @@ final class AppSettings: nonisolated ObservableObject {
         if restoreTerminalHistory {
             lines.append("terminal.restore-history = true")
         }
-        if ShellConfiguration.hasCustomPath(shellPath) {
-            lines.append("terminal.shell = \(TOML.quote(shellPath))")
+        switch terminalStartup {
+        case .loginShell:
+            break
+        case .shell(let path):
+            lines.append("terminal.startup = \"shell\"")
+            lines.append("terminal.program = \(TOML.quote(path))")
+        case .customCommand(let program, let arguments):
+            lines.append("terminal.startup = \"command\"")
+            lines.append("terminal.program = \(TOML.quote(program))")
+            if !arguments.isEmpty {
+                lines.append(
+                    "terminal.arguments = \(TOML.stringArray(arguments))"
+                )
+            }
         }
         if terminalBackend != .fallback {
             lines.append("terminal.backend = \(TOML.quote(terminalBackend.rawValue))")
@@ -362,11 +391,12 @@ final class AppSettings: nonisolated ObservableObject {
 
 /// Minimal TOML support covering what the config file uses: flat and dotted
 /// keys (`font-size = 15`, `terminal.restore-history = true`), string/number/
-/// bool values, and `#` comments. `[table]` headers are also accepted and
-/// flattened to `table.key`, matching the dotted form.
+/// bool values, string arrays, and `#` comments. `[table]` headers are also
+/// accepted and flattened to `table.key`, matching the dotted form.
 enum TOML {
     enum Value {
         case string(String)
+        case strings([String])
         case number(Double)
         case bool(Bool)
 
@@ -377,6 +407,11 @@ enum TOML {
 
         var double: Double? {
             if case .number(let n) = self { return n }
+            return nil
+        }
+
+        var strings: [String]? {
+            if case .strings(let strings) = self { return strings }
             return nil
         }
 
@@ -411,6 +446,11 @@ enum TOML {
     }
 
     private static func parseValue(_ raw: String) -> Value? {
+        if raw.hasPrefix("["),
+           let data = raw.data(using: .utf8),
+           let strings = try? JSONSerialization.jsonObject(with: data) as? [String] {
+            return .strings(strings)
+        }
         if raw.hasPrefix("\"") {
             var out = ""
             var escaped = false
@@ -458,5 +498,15 @@ enum TOML {
     static func number(_ n: Double) -> String {
         n == n.rounded() && abs(n) < 1e15
             ? String(Int(n)) : String(n)
+    }
+
+    static func stringArray(_ strings: [String]) -> String {
+        guard let data = try? JSONSerialization.data(
+            withJSONObject: strings,
+            options: [.withoutEscapingSlashes]
+        ), let value = String(data: data, encoding: .utf8) else {
+            return "[]"
+        }
+        return value
     }
 }

@@ -6904,6 +6904,23 @@
         }
       }
     },
+    "Arguments" : {
+      "comment" : "Custom terminal command arguments.",
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "引数"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "参数"
+          }
+        }
+      }
+    },
     "Choose an executable file, not a folder." : {
       "comment" : "Validation error for the custom shell setting.",
       "localizations" : {
@@ -6953,19 +6970,18 @@
         }
       }
     },
-    "Default (%@)" : {
-      "comment" : "Placeholder for an empty custom shell field.",
+    "Custom command…" : {
       "localizations" : {
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "デフォルト（%@）"
+            "value" : "カスタムコマンド…"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "默认（%@）"
+            "value" : "自定义命令…"
           }
         }
       }
@@ -6983,6 +6999,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "输入 Shell 的绝对路径。"
+          }
+        }
+      }
+    },
+    "Executable" : {
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "実行ファイル"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "可执行文件"
           }
         }
       }
@@ -7020,19 +7052,36 @@
         }
       }
     },
-    "Leave empty to use %@. Changes apply to new terminals." : {
-      "comment" : "Accessibility hint for the custom shell field.",
+    "Login shell (%@)" : {
+      "comment" : "The placeholder is the path to the user’s login shell.",
       "localizations" : {
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "空欄にすると%@を使用します。変更は新しいターミナルに適用されます。"
+            "value" : "ログインシェル（%@）"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "留空则使用 %@。更改将应用于新建的终端。"
+            "value" : "登录 Shell（%@）"
+          }
+        }
+      }
+    },
+    "Press Return after each argument." : {
+      "comment" : "Placeholder for custom terminal command arguments.",
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "各引数の入力後にReturnキーを押します。"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "每输入一个参数后按 Return 键。"
           }
         }
       }

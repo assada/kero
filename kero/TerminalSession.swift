@@ -52,17 +52,18 @@ final class TerminalSession: NSObject, nonisolated ObservableObject, nonisolated
         environmentPath: String? = nil
     ) {
         let directCommand = commandArguments.flatMap { $0.isEmpty ? nil : $0 }
-        let shellPath = directCommand?.first
-            ?? ShellConfiguration.resolvedPath(
-                customPath: AppSettings.shared.shellPath
-            )
+        let configuredLaunch = ShellConfiguration.launch(
+            for: AppSettings.shared.terminalStartup
+        )
+        let launchCommand = directCommand ?? configuredLaunch.commandArguments
+        let shellPath = directCommand?.first ?? configuredLaunch.shellPath
         let directory = Self.validWorkingDirectory(initialDirectory)
         let artifacts = Self.makeLaunchArtifacts(restoredHistory: restoredHistory)
         let backend = AppSettings.shared.terminalBackend
         let script = Self.makeLaunchScript(
             backend: backend,
             shellPath: shellPath,
-            commandArguments: directCommand,
+            commandArguments: launchCommand,
             pidFileURL: artifacts.pidFileURL,
             replayFileURL: artifacts.replayFileURL
         )

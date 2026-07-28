@@ -12,6 +12,11 @@ import Foundation
 /// paths also fall back to it, so a half-edited setting cannot create a broken
 /// terminal.
 enum ShellConfiguration {
+    struct Launch: Sendable {
+        let shellPath: String
+        let commandArguments: [String]?
+    }
+
     nonisolated static var defaultPath: String {
         let passwordDatabasePath: String? = if let entry = getpwuid(getuid()),
                                                let shell = entry.pointee.pw_shell {
@@ -30,17 +35,21 @@ enum ShellConfiguration {
     }
 
     nonisolated static func resolvedPath(customPath: String) -> String {
-        guard let path = expandedCustomPath(customPath),
-              path.hasPrefix("/"),
-              isExecutableFile(path)
-        else {
-            return defaultPath
-        }
-        return path
+        executablePath(customPath) ?? defaultPath
     }
 
-    nonisolated static func validationMessage(for customPath: String) -> String? {
-        guard let path = expandedCustomPath(customPath) else { return nil }
+    nonisolated static func validationMessage(
+        for customPath: String,
+        required: Bool = false
+    ) -> String? {
+        guard let path = expandedCustomPath(customPath) else {
+            return required
+                ? String(
+                    localized: "Enter an absolute path to a shell.",
+                    comment: "Validation error for the custom shell setting."
+                )
+                : nil
+        }
         guard path.hasPrefix("/") else {
             return String(
                 localized: "Enter an absolute path to a shell.",
@@ -70,8 +79,41 @@ enum ShellConfiguration {
         return nil
     }
 
-    nonisolated static func hasCustomPath(_ value: String) -> Bool {
-        expandedCustomPath(value) != nil
+    nonisolated static func launch(for startup: TerminalStartup) -> Launch {
+        switch startup {
+        case .loginShell:
+            return Launch(shellPath: defaultPath, commandArguments: nil)
+        case .shell(let path):
+            return Launch(
+                shellPath: resolvedPath(customPath: path),
+                commandArguments: nil
+            )
+        case .customCommand(let program, let arguments):
+            guard let program = executablePath(program) else {
+                return Launch(shellPath: defaultPath, commandArguments: nil)
+            }
+            return Launch(
+                shellPath: program,
+                commandArguments: [program] + arguments
+            )
+        }
+    }
+
+    nonisolated static func isExecutableFile(_ path: String) -> Bool {
+        var isDirectory: ObjCBool = false
+        return FileManager.default.fileExists(atPath: path, isDirectory: &isDirectory)
+            && !isDirectory.boolValue
+            && FileManager.default.isExecutableFile(atPath: path)
+    }
+
+    private nonisolated static func executablePath(_ value: String) -> String? {
+        guard let path = expandedCustomPath(value),
+              path.hasPrefix("/"),
+              isExecutableFile(path)
+        else {
+            return nil
+        }
+        return path
     }
 
     private nonisolated static func expandedCustomPath(_ value: String) -> String? {
@@ -80,10 +122,4 @@ enum ShellConfiguration {
         return (trimmed as NSString).expandingTildeInPath
     }
 
-    private nonisolated static func isExecutableFile(_ path: String) -> Bool {
-        var isDirectory: ObjCBool = false
-        return FileManager.default.fileExists(atPath: path, isDirectory: &isDirectory)
-            && !isDirectory.boolValue
-            && FileManager.default.isExecutableFile(atPath: path)
-    }
 }
