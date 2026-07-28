@@ -28,6 +28,7 @@ nonisolated final class FileTreeGitRepositoryWorker: @unchecked Sendable {
     private var isRunning = false
     private var revision: UInt = 1
     private var isStopped = false
+    private var hasPublishedInitialStatus = false
 
     init(
         descriptor: FileTreeGitRepositoryDescriptor,
@@ -215,7 +216,16 @@ nonisolated final class FileTreeGitRepositoryWorker: @unchecked Sendable {
             || !pendingPaths.isEmpty
             || pendingFullIgnoredRefresh
             || !pendingIgnoredPaths.isEmpty
-        if !hasNewerWork {
+        // Do not make first-paint readiness depend on the worktree becoming
+        // completely quiet. A build can continuously enqueue newer paths; the
+        // first completed full snapshot is coherent and later operations will
+        // reactively bring it forward.
+        let publishesInitialStatus =
+            fullRefresh && !hasPublishedInitialStatus
+        if publishesInitialStatus {
+            hasPublishedInitialStatus = true
+        }
+        if publishesInitialStatus || !hasNewerWork {
             onUpdate(state)
         }
         startNextOperation()

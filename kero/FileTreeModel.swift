@@ -41,14 +41,23 @@ final class FileTreeModel: nonisolated ObservableObject {
     @Published private(set) var draft: Draft?
     private var expanded: Set<String> = []
     private var gitSnapshot = FileTreeGitSnapshot.empty
-    private lazy var gitStatusController = FileTreeGitStatusController(
-        onSnapshot: { [weak self] snapshot in
-            self?.applyGitSnapshot(snapshot)
-        },
-        onWorktreeChange: { [weak self] in
-            self?.rebuild()
-        }
-    )
+    private let gitStatusStore: ProjectGitStatusStore
+    private var gitObservations: Set<AnyCancellable> = []
+
+    init(gitStatusStore: ProjectGitStatusStore) {
+        self.gitStatusStore = gitStatusStore
+        gitStatusStore.$snapshot
+            .sink { [weak self] snapshot in
+                self?.applyGitSnapshot(snapshot)
+            }
+            .store(in: &gitObservations)
+        gitStatusStore.$worktreeRevision
+            .dropFirst()
+            .sink { [weak self] _ in
+                self?.rebuild()
+            }
+            .store(in: &gitObservations)
+    }
 
     var rootName: String {
         (rootPath as NSString).lastPathComponent
@@ -72,10 +81,12 @@ final class FileTreeModel: nonisolated ObservableObject {
             draft = nil
         }
         rebuild(updateGitVisibility: false)
-        gitStatusController.configure(
-            workspaceRoot: root,
-            visiblePaths: visibleGitPaths
-        )
+        gitStatusStore.configure(workspaceRoot: root)
+        // A newly mounted sidebar can join an already-warm palette-owned
+        // store. Published values do not re-emit merely because the consumer
+        // appeared, so adopt the current immutable snapshot synchronously.
+        applyGitSnapshot(gitStatusStore.snapshot)
+        gitStatusStore.updateFileTreePaths(visibleGitPaths)
     }
 
     func toggle(_ item: Item) {
@@ -257,7 +268,7 @@ final class FileTreeModel: nonisolated ObservableObject {
             items = out
         }
         if updateGitVisibility {
-            gitStatusController.updateVisiblePaths(visibleGitPaths)
+            gitStatusStore.updateFileTreePaths(visibleGitPaths)
         }
     }
 

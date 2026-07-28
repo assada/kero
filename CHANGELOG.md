@@ -19,7 +19,7 @@ the original feature bullet instead of adding separate entries for them.
 - Files created in a terminal now use your system's default permissions instead of being made private to your user
 - Choose a login shell or an exact custom command for new terminals in Settings, with installed shells available from a picker
 - Save edited files when the editor loses focus. This setting is off by default
-- Files and folders now use Git status colors. Folder colors summarize changes within each repository
+- Files, folders, and command-palette file results now use Git status colors. Folder colors summarize changes within each repository
 
 ## [0.1.32]
 

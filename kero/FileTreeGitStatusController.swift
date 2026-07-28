@@ -12,14 +12,17 @@ import Foundation
 final class FileTreeGitStatusController {
     typealias SnapshotHandler = (FileTreeGitSnapshot) -> Void
     typealias WorktreeHandler = () -> Void
+    typealias ReadinessHandler = (Bool) -> Void
 
     private let onSnapshot: SnapshotHandler
     private let onWorktreeChange: WorktreeHandler
+    private let onReadinessChange: ReadinessHandler
 
     private var workspaceRoot = ""
     private var visiblePaths: [String] = []
     private var generation: UInt = 0
     private var workers: [String: FileTreeGitRepositoryWorker] = [:]
+    private var workerTokens: [String: UUID] = [:]
     private var states: [String: FileTreeGitRepositoryState] = [:]
     private var watcher: FileSystemEventWatcher?
     private var watchedPaths: Set<String> = []
@@ -28,13 +31,19 @@ final class FileTreeGitStatusController {
     private var isDiscovering = false
     private var pendingDiscoveryCandidates: Set<String> = []
     private var pendingDiscoveryPrune = false
+    /// New workers have a repository descriptor before their first status
+    /// command finishes. Keep that state distinct from a genuinely clean repo.
+    private var repositoriesAwaitingInitialStatus: Set<String> = []
+    private var lastReadiness = false
 
     init(
         onSnapshot: @escaping SnapshotHandler,
-        onWorktreeChange: @escaping WorktreeHandler
+        onWorktreeChange: @escaping WorktreeHandler,
+        onReadinessChange: @escaping ReadinessHandler
     ) {
         self.onSnapshot = onSnapshot
         self.onWorktreeChange = onWorktreeChange
+        self.onReadinessChange = onReadinessChange
     }
 
     deinit {
@@ -81,6 +90,7 @@ final class FileTreeGitStatusController {
         watchedPaths.removeAll()
         workers.values.forEach { $0.stop() }
         workers.removeAll()
+        workerTokens.removeAll()
         states.removeAll()
         workspaceRoot = ""
         visiblePaths = []
@@ -88,6 +98,8 @@ final class FileTreeGitStatusController {
         isDiscovering = false
         pendingDiscoveryCandidates.removeAll()
         pendingDiscoveryPrune = false
+        repositoriesAwaitingInitialStatus.removeAll()
+        publishReadiness(false)
     }
 
     // MARK: - Filesystem events
@@ -220,6 +232,11 @@ final class FileTreeGitStatusController {
         candidates: Set<String>,
         pruneInvalid: Bool
     ) {
+        guard !candidates.isEmpty || pruneInvalid else {
+            publishCurrentReadiness()
+            return
+        }
+        publishReadiness(false)
         pendingDiscoveryCandidates.formUnion(candidates)
         pendingDiscoveryPrune = pendingDiscoveryPrune || pruneInvalid
         startDiscoveryIfNeeded()
@@ -268,7 +285,9 @@ final class FileTreeGitStatusController {
             let validRoots = Set(resolvedByRoot.keys)
             for root in checkedRoots.subtracting(validRoots) {
                 workers.removeValue(forKey: root)?.stop()
+                workerTokens.removeValue(forKey: root)
                 states.removeValue(forKey: root)
+                repositoriesAwaitingInitialStatus.remove(root)
             }
         }
 
@@ -282,6 +301,9 @@ final class FileTreeGitStatusController {
             }
 
             workers.removeValue(forKey: descriptor.root)?.stop()
+            let workerToken = UUID()
+            workerTokens[descriptor.root] = workerToken
+            repositoriesAwaitingInitialStatus.insert(descriptor.root)
             let initialState = FileTreeGitRepositoryState(
                 descriptor: descriptor
             )
@@ -291,7 +313,7 @@ final class FileTreeGitStatusController {
                 visiblePaths: visiblePaths
             ) { [weak self] state in
                 Task { @MainActor [weak self] in
-                    self?.apply(state)
+                    self?.apply(state, from: workerToken)
                 }
             }
             workers[descriptor.root] = worker
@@ -301,13 +323,19 @@ final class FileTreeGitStatusController {
         installWatcher()
         publishSnapshot()
         startDiscoveryIfNeeded()
+        publishCurrentReadiness()
     }
 
-    private func apply(_ state: FileTreeGitRepositoryState) {
+    private func apply(
+        _ state: FileTreeGitRepositoryState,
+        from workerToken: UUID
+    ) {
         let root = state.descriptor.root
         guard workers[root] != nil,
+              workerTokens[root] == workerToken,
               states[root]?.descriptor == state.descriptor
         else { return }
+        repositoriesAwaitingInitialStatus.remove(root)
         states[root] = state
         publishSnapshot()
 
@@ -326,6 +354,7 @@ final class FileTreeGitStatusController {
                 pruneInvalid: false
             )
         }
+        publishCurrentReadiness()
     }
 
     private func publishSnapshot() {
@@ -336,6 +365,21 @@ final class FileTreeGitStatusController {
         guard snapshot != lastSnapshot else { return }
         lastSnapshot = snapshot
         onSnapshot(snapshot)
+    }
+
+    private func publishCurrentReadiness() {
+        publishReadiness(
+            !workspaceRoot.isEmpty
+                && !isDiscovering
+                && pendingDiscoveryCandidates.isEmpty
+                && repositoriesAwaitingInitialStatus.isEmpty
+        )
+    }
+
+    private func publishReadiness(_ isReady: Bool) {
+        guard isReady != lastReadiness else { return }
+        lastReadiness = isReady
+        onReadinessChange(isReady)
     }
 
     private func repositoriesIntersectWorkspace(_ repositoryRoot: String) -> Bool {

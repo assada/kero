@@ -12,11 +12,20 @@ struct RightSidebarView: View {
     @ObservedObject var manager: TerminalManager
     @ObservedObject private var settings = AppSettings.shared
     @ObservedObject private var themeChanges = Theme.changes
-    @StateObject private var fileTree = FileTreeModel()
+    @StateObject private var fileTree: FileTreeModel
     @StateObject private var git = GitStatusModel()
     @StateObject private var info = SessionInfoModel()
     @State private var applicationIsActive = NSApp.isActive
     @AppStorage("rightSidebarWidth") private var width: Double = 240
+
+    init(manager: TerminalManager) {
+        self.manager = manager
+        _fileTree = StateObject(
+            wrappedValue: FileTreeModel(
+                gitStatusStore: manager.projectGitStatuses
+            )
+        )
+    }
 
     private var pollsSelectedPanel: Bool {
         manager.isPanelVisible

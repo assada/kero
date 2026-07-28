@@ -43,6 +43,10 @@ final class TerminalManager: nonisolated ObservableObject {
     @Published var isLeftSidebarVisible = true
     @Published private(set) var isCommandPaletteVisible = false
 
+    /// Shared by the Files sidebar and command-palette file results so both
+    /// surfaces render one reactive source-control snapshot.
+    let projectGitStatuses = ProjectGitStatusStore()
+
     /// Projects publish their own changes (session list, session selection);
     /// re-publish them so views observing the manager stay current.
     private var projectObservations: [UUID: AnyCancellable] = [:]
