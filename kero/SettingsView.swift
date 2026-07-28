@@ -212,7 +212,7 @@ struct SettingsView: View {
             }
         }
         .formStyle(.grouped)
-        .frame(width: 560)
+        .frame(width: 440)
         .alert(
             "Couldn’t Relaunch Kero",
             isPresented: $isShowingRelaunchError

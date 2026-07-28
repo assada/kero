@@ -20,10 +20,9 @@ struct ShellSettingsView: View {
     var body: some View {
         LabeledContent("Shell") {
             HStack(spacing: 8) {
-                shellPicker
-                    .frame(width: isCustomCommand ? 180 : 360)
-
                 if isCustomCommand {
+                    shellPicker
+                        .fixedSize()
                     TextField(
                         "Executable",
                         text: customProgram,
@@ -35,8 +34,13 @@ struct ShellSettingsView: View {
                     .focused($isProgramFieldFocused)
                     .onSubmit { isProgramFieldFocused = false }
                     .help(customProgram.wrappedValue)
+                } else {
+                    Spacer(minLength: 0)
+                    shellPicker
+                        .fixedSize()
                 }
             }
+            .frame(maxWidth: .infinity, alignment: .trailing)
             .accessibilityHint("Changes apply to new terminals.")
         }
 
